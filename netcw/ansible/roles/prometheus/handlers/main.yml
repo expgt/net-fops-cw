@@ -1,0 +1,6 @@
+- name: Restart Docker Compose services
+  community.docker.docker_compose_v2:
+    project_src: /etc/prometheus-stack
+    state: present
+    build: always
+    recreate: always

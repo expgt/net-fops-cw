@@ -1,0 +1,10 @@
+grafana_version: "13.1.5"
+
+threshold_cpu_warn: 70
+threshold_cpu_crit: 85
+threshold_ram_warn: 80
+threshold_ram_crit: 90
+threshold_disk_warn: 80
+threshold_disk_crit: 95
+
+prometheus_url: "http://{{ hostvars['prometheus']['ansible_host'] }}:9090"

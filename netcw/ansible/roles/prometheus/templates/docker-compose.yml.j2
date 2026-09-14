@@ -1,0 +1,40 @@
+services:
+  prometheus:
+    image: prom/prometheus:{{ prometheus_version }}
+    container_name: prometheus
+    volumes:
+      - /etc/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - /etc/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+    ports:
+      - "9090:9090"
+    depends_on:
+      - telegraf
+    restart: unless-stopped
+
+  telegraf:
+    image: telegraf:1.40.0
+    container_name: telegraf
+    ports:
+      - "9201:9201"
+    environment:
+      - PG_HOST={{ pg_host }}
+      - PG_PORT={{ pg_port }}
+      - PG_DATABASE={{ pg_database }}
+      - PG_USER={{ pg_user }}
+      - PG_PASSWORD={{ pg_password }}
+    volumes:
+      - /etc/telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:{{ alertmanager_version }}
+    container_name: alertmanager
+    volumes:
+      - /etc/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+    ports:
+      - "9093:9093"
+    restart: unless-stopped

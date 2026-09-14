@@ -1,0 +1,130 @@
+---
+- name: Install ca-certificates and curl
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+    state: present
+    update_cache: true
+
+- name: Ensure keyrings directory exists with correct permissions
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+
+- name: Download Docker official GPG key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: '0644'
+
+- name: Add Docker official repository to Apt sources (DEB822 Format)
+  ansible.builtin.shell: |
+    cat <<EOF > /etc/apt/sources.list.d/docker.sources
+    Types: deb
+    URIs: https://download.docker.com/linux/ubuntu
+    Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
+    Components: stable
+    Architectures: $(dpkg --print-architecture)
+    Signed-By: /etc/apt/keyrings/docker.asc
+    EOF
+  changed_when: true
+
+- name: Force apt update after adding official repository
+  ansible.builtin.apt:
+    update_cache: true
+
+- name: Install official Docker and Compose plugin
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+      - python3-docker
+    state: present
+
+- name: Ensure docker service is running and enabled
+  ansible.builtin.systemd:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Create Filebeat configuration directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - /etc/filebeat
+    - /etc/filebeat/modules.d
+
+- name: Creating a Filebeat configuration (dynamic template)
+  ansible.builtin.template:
+    src: filebeat.yml.j2
+    dest: /etc/filebeat/filebeat.yml
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart Filebeat Container
+
+- name: Configure and enable Nginx module
+  ansible.builtin.copy:
+    dest: /etc/filebeat/modules.d/nginx.yml
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      - module: nginx
+        access:
+          enabled: true
+          var.paths: ["/var/log/nginx/access.log"]
+        error:
+          enabled: true
+          var.paths: ["/var/log/nginx/error.log"]
+  when: "'webserverscw' in group_names"
+  notify: Restart Filebeat Container
+
+- name: Enabling the Elasticsearch module
+  ansible.builtin.copy:
+    dest: /etc/filebeat/modules.d/elasticsearch.yml
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      - module: elasticsearch
+        server:
+          enabled: true
+  when: "'elasticsearchcw' in group_names"
+  notify: Restart Filebeat Container
+
+- name: Enabling the Kibana module
+  ansible.builtin.copy:
+    dest: /etc/filebeat/modules.d/kibana.yml
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      - module: kibana
+        log:
+          enabled: true
+  when: "'kibanacw' in group_names"
+  notify: Restart Filebeat Container
+
+- name: Run Filebeat Docker container
+  community.docker.docker_container:
+    name: filebeat
+    image: docker.elastic.co/beats/filebeat:9.5.3
+    state: started
+    restart_policy: always
+    user: root
+    volumes:
+      - /etc/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /etc/filebeat/modules.d:/usr/share/filebeat/modules.d:ro
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro

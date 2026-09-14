@@ -1,0 +1,122 @@
+---
+- name: Install ca-certificates and curl
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+    state: present
+    update_cache: true
+
+- name: Ensure keyrings directory exists with correct permissions
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+
+- name: Download Docker official GPG key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: '0644'
+
+- name: Add Docker official repository to Apt sources (DEB822 Format)
+  ansible.builtin.shell: |
+    cat <<EOF > /etc/apt/sources.list.d/docker.sources
+    Types: deb
+    URIs: https://download.docker.com/linux/ubuntu
+    Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
+    Components: stable
+    Architectures: $(dpkg --print-architecture)
+    Signed-By: /etc/apt/keyrings/docker.asc
+    EOF
+  changed_when: true
+
+- name: Force apt update after adding official repository
+  ansible.builtin.apt:
+    update_cache: true
+
+- name: Install official Docker and Compose plugin
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+      - python3-docker
+    state: present
+
+- name: Ensure docker service is running and enabled
+  ansible.builtin.systemd:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Ensure Grafana configuration directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: 472
+    group: 472
+    mode: '0755'
+  loop:
+    - /etc/grafana/provisioning/datasources
+    - /etc/grafana/provisioning/dashboards
+    - /var/lib/grafana
+    - /var/lib/grafana/dashboards
+
+- name: Provision Prometheus Datasource
+  ansible.builtin.template:
+    src: datasource.yml.j2
+    dest: /etc/grafana/provisioning/datasources/prometheus.yml
+    owner: 472
+    group: 472
+    mode: '0640'
+  notify: Restart Grafana container
+
+- name: Configure Dashboard provisioning file
+  ansible.builtin.copy:
+    content: |
+      apiVersion: 1
+      providers:
+        - name: 'AutomatedDashboards'
+          orgId: 1
+          folder: ''
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards
+    dest: /etc/grafana/provisioning/dashboards/all.yml
+    owner: 472
+    group: 472
+    mode: '0640'
+  notify: Restart Grafana container
+
+- name: Provision USE & Nginx Dashboard
+  ansible.builtin.template:
+    src: dashboard.json.j2
+    dest: /var/lib/grafana/dashboards/use_nginx_dashboard.json
+    owner: 472
+    group: 472
+    mode: '0644'
+  notify: Restart Grafana container
+
+- name: Flush handlers before starting container
+  ansible.builtin.meta: flush_handlers
+
+- name: Run Grafana Docker container
+  community.docker.docker_container:
+    name: grafana
+    image: "grafana/grafana:{{ grafana_version }}"
+    state: started
+    restart_policy: unless-stopped
+    ports:
+      - "3000:3000"
+    env:
+      GF_SECURITY_ADMIN_USER: "{{ grafana_admin_user }}"
+      GF_SECURITY_ADMIN_PASSWORD: "{{ grafana_admin_password }}"
+      GF_DATABASE_WAL: "true"
+    volumes:
+      - /etc/grafana/provisioning:/etc/grafana/provisioning:ro
+      - /var/lib/grafana:/var/lib/grafana:rw

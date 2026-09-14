@@ -1,0 +1,30 @@
+- hosts: webserverscw
+  become: true
+  roles:
+    - nginx_web
+    - exporters
+    - filebeat
+
+- hosts: prometheuscw
+  become: true
+  roles:
+    - prometheus
+    - filebeat
+
+- hosts: grafanacw
+  become: true
+  roles:
+    - grafana
+    - filebeat
+
+- hosts: elasticsearchcw
+  become: true
+  roles:
+    - elasticsearch
+    - filebeat
+
+- hosts: kibanacw
+  become: true
+  roles:
+    - kibana
+    - filebeat

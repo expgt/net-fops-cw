@@ -1,0 +1,7 @@
+---
+- name: Restart Filebeat Container
+  community.docker.docker_container:
+    name: filebeat
+    image: docker.elastic.co/beats/filebeat:9.5.3
+    state: started
+    restart: true

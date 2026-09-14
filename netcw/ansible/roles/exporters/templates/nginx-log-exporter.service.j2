@@ -1,0 +1,11 @@
+[Unit]
+Description=Prometheus Nginx Log Exporter
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/prometheus-nginxlog-exporter -config-file /etc/nginx-log-exporter/config.hcl
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

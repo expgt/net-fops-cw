@@ -1,0 +1,9 @@
+prometheus_version: "v3.13.0"
+alertmanager_version: "v0.33.0"
+telegraf_version: "1.40.0"
+
+pg_host: ""
+pg_port: 6432
+pg_database: ""
+pg_user: ""
+pg_password: ""

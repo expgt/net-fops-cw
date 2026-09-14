@@ -1,0 +1,154 @@
+{
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "refresh": "5s",
+  "schemaVersion": 36,
+  "style": "dark",
+  "tags": ["ansible", "node-exporter", "nginx-log-exporter"],
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "Infrastructure & Nginx HTTP Metrics (USE)",
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "datasource": { "type": "prometheus", "uid": "Prometheus" },
+        "hide": 0,
+        "includeAll": true,
+        "multi": false,
+        "name": "instance",
+        "options": [],
+        "query": { "query": "label_values(node_cpu_seconds_total, instance)", "refId": "StandardVariableQuery" },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {},
+        "datasource": { "type": "prometheus", "uid": "Prometheus" },
+        "hide": 0,
+        "includeAll": true,
+        "multi": false,
+        "name": "host",
+        "options": [],
+        "query": { "query": "label_values(http_response_count_total, host)", "refId": "StandardVariableQuery" },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "panels": [
+    { "title": "CPU METRICS (USE)", "type": "row", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }, "collapsed": false },
+    {
+      "id": 1, "title": "CPU Utilization", "type": "timeseries", "gridPos": { "h": 7, "w": 8, "x": 0, "y": 1 },
+      "targets": [{ "expr": "{% raw %}100 - (avg by (instance) (rate(node_cpu_seconds_total{mode='idle', instance=~'$instance'}[5m])) * 100){% endraw %}", "legendFormat": "{% raw %}{{instance}} Util{% endraw %}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": {{ threshold_cpu_warn }} }, { "color": "red", "value": {{ threshold_cpu_crit }} }] } } }
+    },
+    {
+      "id": 2, "title": "CPU Saturation (Load Average 1m)", "type": "timeseries", "gridPos": { "h": 7, "w": 8, "x": 8, "y": 1 },
+      "targets": [{ "expr": "node_load1{instance=~'$instance'}", "legendFormat": "{% raw %}{{instance}} Load 1m{% endraw %}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 4 }, { "color": "red", "value": 8 }] } } }
+    },
+    {
+      "id": 3, "title": "CPU Errors (Throttling Rate)", "type": "timeseries", "gridPos": { "h": 7, "w": 8, "x": 16, "y": 1 },
+      "targets": [{ "expr": "{% raw %}avg by (instance) (rate(node_cpu_seconds_total{mode='system'}[5m])){% endraw %}", "legendFormat": "{% raw %}{{instance}} Throttles/s{% endraw %}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } }
+    },
+    { "title": "RAM METRICS (USE)", "type": "row", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 8 }, "collapsed": false },
+    {
+      "id": 4, "title": "RAM Utilization", "type": "timeseries", "gridPos": { "h": 7, "w": 8, "x": 0, "y": 9 },
+      "targets": [{ "expr": "{% raw %}100 * (1 - (node_memory_MemAvailable_bytes{instance=~'$instance'} / node_memory_MemTotal_bytes{instance=~'$instance'})){% endraw %}", "legendFormat": "{% raw %}{{instance}} RAM %{% endraw %}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": {{ threshold_ram_warn }} }, { "color": "red", "value": {{ threshold_ram_crit }} }] } } }
+    },
+    {
+      "id": 5, "title": "RAM Saturation (Major Page Faults)", "type": "timeseries", "gridPos": { "h": 7, "w": 8, "x": 8, "y": 9 },
+      "targets": [{ "expr": "{% raw %}rate(node_vmstat_pgmajfault{instance=~'$instance'}[5m]){% endraw %}", "legendFormat": "{% raw %}{{instance}} Major Faults/s{% endraw %}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 20 }] } } }
+    },
+    {
+      "id": 6, "title": "RAM Errors (OOM Kills)", "type": "timeseries", "gridPos": { "h": 7, "w": 8, "x": 16, "y": 9 },
+      "targets": [{ "expr": "node_vmstat_oom_kill{instance=~'$instance'}", "legendFormat": "{% raw %}{{instance}} OOM Kills{% endraw %}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } }
+    },
+
+    { "title": "DISK METRICS (USE)", "type": "row", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 16 }, "collapsed": false },
+    {
+      "id": 7, "title": "Disk Space Utilization (Root FileSystem)", "type": "timeseries", "gridPos": { "h": 7, "w": 8, "x": 0, "y": 17 },
+      "targets": [{ "expr": "{% raw %}100 * (1 - (node_filesystem_free_bytes{instance=~'$instance', mountpoint='/'} / node_filesystem_size_bytes{instance=~'$instance', mountpoint='/'})){% endraw %}", "legendFormat": "{% raw %}{{instance}} Space %{% endraw %}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": {{ threshold_disk_warn }} }, { "color": "red", "value": {{ threshold_disk_crit }} }] } } }
+    },
+    {
+      "id": 8, "title": "Disk Saturation (IO Utilization %)", "type": "timeseries", "gridPos": { "h": 7, "w": 8, "x": 8, "y": 17 },
+      "targets": [{ "expr": "{% raw %}rate(node_disk_io_time_seconds_total{instance=~'$instance'}[5m]) * 100{% endraw %}", "legendFormat": "{% raw %}{{device}} IO %{% endraw %}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "max": 100, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 80 }, { "color": "red", "value": 95 }] } } }
+    },
+    {
+      "id": 9, "title": "Disk I/O Time Weighted Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 17 },
+      "targets": [{ "expr": "{% raw %}sum by (instance) (rate(node_disk_io_time_weighted_seconds_total[5m])) * 100{% endraw %}", "legendFormat": "{% raw %}{{instance}} Queue Rate{% endraw %}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 80 }, { "color": "red", "value": 95 }] } } }
+    },
+
+    { "title": "NETWORK METRICS (USE)", "type": "row", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 24 }, "collapsed": false },
+    {
+      "id": 10, "title": "Network Utilization (Rx/Tx)", "type": "timeseries", "gridPos": { "h": 7, "w": 8, "x": 0, "y": 25 },
+      "targets": [
+        { "expr": "{% raw %}rate(node_network_receive_bytes_total{instance=~'$instance', device!='lo'}[5m]){% endraw %}", "legendFormat": "{% raw %}{{device}} Rx{% endraw %}", "refId": "A" },
+        { "expr": "{% raw %}rate(node_network_transmit_bytes_total{instance=~'$instance', device!='lo'}[5m]){% endraw %}", "legendFormat": "{% raw %}{{device}} Tx{% endraw %}", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "Bps" } }
+    },
+    {
+      "id": 11, "title": "Network Saturation (Dropped Packets)", "type": "timeseries", "gridPos": { "h": 7, "w": 8, "x": 8, "y": 25 },
+      "targets": [
+        { "expr": "{% raw %}rate(node_network_receive_drop_total{instance=~'$instance'}[5m]){% endraw %}", "legendFormat": "{% raw %}{{device}} Rx Drop{% endraw %}", "refId": "A" },
+        { "expr": "{% raw %}rate(node_network_transmit_drop_total{instance=~'$instance'}[5m]){% endraw %}", "legendFormat": "{% raw %}{{device}} Tx Drop{% endraw %}", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "pps", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 5 }] } } }
+    },
+    {
+      "id": 12, "title": "Network Errors", "type": "timeseries", "gridPos": { "h": 7, "w": 8, "x": 16, "y": 25 },
+      "targets": [
+        { "expr": "{% raw %}rate(node_network_receive_errs_total{instance=~'$instance'}[5m]){% endraw %}", "legendFormat": "{% raw %}{{device}} Rx Errs{% endraw %}", "refId": "A" },
+        { "expr": "{% raw %}rate(node_network_transmit_errs_total{instance=~'$instance'}[5m]){% endraw %}", "legendFormat": "{% raw %}{{device}} Tx Errs{% endraw %}", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "pps", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } }
+    },
+
+    { "title": "NGINX LOG EXPORTER HTTP METRICS", "type": "row", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 32 }, "collapsed": false },
+    {
+    "id": 13, "title": "HTTP Response Count Total (RPS)", "type": "timeseries", "gridPos": { "h": 7, "w": 12, "x": 0, "y": 33 },
+    "targets": [{ "expr": "{% raw %}sum(rate(nginx_http_response_count_total[5m])) by (instance){% endraw %}", "legendFormat": "{% raw %}{{instance}} RPS{% endraw %}", "refId": "A" }],
+    "fieldConfig": { 
+      "defaults": { 
+        "unit": "rps",
+        "min": 0,
+        "thresholds": {
+          "mode": "absolute",
+          "steps": [
+            { "color": "green", "value": null }
+          ]
+        }
+      }
+    }
+    },
+    {
+    "id": 14, "title": "HTTP Response Size (Bandwidth Out)", "type": "timeseries", "gridPos": { "h": 7, "w": 12, "x": 12, "y": 33 },
+    "targets": [{ "expr": "{% raw %}sum(rate(nginx_http_response_size_bytes[5m])) by (instance){% endraw %}", "legendFormat": "{% raw %}{{instance}} Трафик{% endraw %}", "refId": "A" }],
+    "fieldConfig": { 
+      "defaults": { 
+        "unit": "binBps", 
+        "min": 0 
+      } 
+     }
+    }
+  ],
+  "version": 3
+}

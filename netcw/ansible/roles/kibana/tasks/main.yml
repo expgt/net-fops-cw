@@ -1,0 +1,106 @@
+---
+- name: Install ca-certificates and curl
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+    state: present
+    update_cache: true
+
+- name: Ensure keyrings directory exists with correct permissions
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+
+- name: Download Docker official GPG key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: '0644'
+
+- name: Add Docker official repository to Apt sources (DEB822 Format)
+  ansible.builtin.shell: |
+    cat <<EOF > /etc/apt/sources.list.d/docker.sources
+    Types: deb
+    URIs: https://download.docker.com/linux/ubuntu
+    Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
+    Components: stable
+    Architectures: $(dpkg --print-architecture)
+    Signed-By: /etc/apt/keyrings/docker.asc
+    EOF
+  changed_when: true
+
+- name: Force apt update after adding official repository
+  ansible.builtin.apt:
+    update_cache: true
+
+- name: Install official Docker and Compose plugin
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+      - python3-docker
+    state: present
+
+- name: Ensure docker service is running and enabled
+  ansible.builtin.systemd:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Start Docker container Kibana
+  community.docker.docker_container:
+    name: kibana
+    image: docker.elastic.co/kibana/kibana:9.5.3
+    state: started
+    restart_policy: always
+    ports:
+      - "5601:5601"
+    env:
+      SERVER_PORT: "5601"
+      SERVER_HOST: "0.0.0.0"
+      ELASTICSEARCH_HOSTS: "http://{{ hostvars['elasticsearch']['ansible_host'] }}:9200"
+
+- name: Checking Kibana API availability
+  ansible.builtin.uri:
+    url: "http://localhost:5601/api/status"
+    method: GET
+    status_code: 200
+  register: kibana_status
+  until: kibana_status.status == 200
+  retries: 30
+  delay: 10
+
+- name: Create a Data View for Filebeat logs Nginx
+  ansible.builtin.uri:
+    url: "http://localhost:5601/api/data_views/data_view"
+    method: POST
+    status_code: [200, 400]
+    headers:
+      kbn-xsrf: "true"
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      data_view:
+        title: "nginx-*"
+        name: "Web Servers (Nginx)"
+        timeFieldName: "@timestamp"
+
+- name: Create a Data View for Filebeat logs Monitoring
+  ansible.builtin.uri:
+    url: "http://localhost:5601/api/data_views/data_view"
+    method: POST
+    status_code: [200, 400]
+    headers:
+      kbn-xsrf: "true"
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      data_view:
+        title: "monitoring-*"
+        name: "Monitoring Infrastructure"
+        timeFieldName: "@timestamp"

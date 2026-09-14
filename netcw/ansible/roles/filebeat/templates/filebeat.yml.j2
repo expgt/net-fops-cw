@@ -1,0 +1,54 @@
+#============================== Autodiscover ==================================
+{% if 'webserverscw' not in group_names %}
+filebeat.autodiscover:
+  providers:
+    - type: docker
+      hints.enabled: true
+      templates:
+        - condition:
+            contains:
+              docker.container.name: "{{ 'prometheus' if 'prometheuscw' in group_names else 'grafana' if 'grafanacw' in group_names else 'kibana' if 'kibanacw' in group_names else 'elasticsearch' if 'elasticsearchcw' in group_names else 'unknown_service' }}"
+          config:
+            - type: filestream
+              id: "docker-sys-logs-${data.docker.container.name}"
+              paths:
+                - "/var/lib/docker/containers/${data.docker.container.id}/*.log"
+              parsers:
+                - container:
+                    stream: all
+              fields:
+                log_type: "{{ 'prometheus' if 'prometheuscw' in group_names else 'grafana' if 'grafanacw' in group_names else 'kibana' if 'kibanacw' in group_names else 'elasticsearch' if 'elasticsearchcw' in group_names else 'unknown' }}"
+              fields_under_root: true
+{% endif %}
+
+#============================= Filebeat Modules ===============================
+filebeat.config.modules:
+  path: ${path.config}/modules.d/*.yml
+  reload.enabled: false
+
+#================================ Outputs =====================================
+output.elasticsearch:
+  hosts: ["http://{{ hostvars['elasticsearch']['ansible_host'] }}:9200"]
+  
+{% if 'webserverscw' in group_names %}
+  index: "nginx-%{[agent.version]}-%{+yyyy.MM.dd}"
+{% else %}
+  index: "monitoring-%{[log_type]}-%{[agent.version]}-%{+yyyy.MM.dd}"
+{% endif %}
+
+setup.ilm.enabled: false
+setup.template.enabled: true
+
+{% if 'webserverscw' in group_names %}
+setup.template.name: "nginx"
+setup.template.pattern: "nginx-*"
+{% else %}
+setup.template.name: "monitoring"
+setup.template.pattern: "monitoring-*"
+{% endif %}
+
+#================================ Processors =====================================
+processors:
+  - add_host_metadata: ~
+  - add_docker_metadata:
+      host: "unix:///var/run/docker.sock"

@@ -1,0 +1,22 @@
+{% raw %}
+groups:
+  - name: infrastructure_alerts
+    rules:
+      - alert: InstanceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Сервер {{ $labels.instance }} недоступен!"
+          description: "Мониторинг потерял связь с хостом {{ $labels.instance }} более чем на 1 минуту."
+
+      - alert: HostHighCpuLoad
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокая загрузка CPU на {{ $labels.instance }}"
+          description: "Процессор загружен более чем на 90% в течение последних 5 минут."
+{% endraw %}

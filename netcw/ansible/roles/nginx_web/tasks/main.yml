@@ -1,0 +1,96 @@
+---
+- name: Install Nginx
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+    update_cache: true
+
+- name: Create a directory for the website
+  ansible.builtin.file:
+    path: /var/www/html
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: '0755'
+
+- name: Copy static site files
+  ansible.builtin.copy:
+    src: files/site/
+    dest: /var/www/html/files/
+    owner: www-data
+    group: www-data
+    mode: '0644'
+
+- name: Create index.html with static links
+  ansible.builtin.copy:
+    dest: /var/www/html/index.html
+    owner: www-data
+    group: www-data
+    mode: '0644'
+    content: |
+      <!DOCTYPE html>
+      <html lang="ru">
+      <head>
+          <meta charset="UTF-8">
+          <title>Главная страница</title>
+          <link rel="stylesheet" href="/static/style.css">
+      </head>
+      <body>
+          <h1>Привет!</h1>
+          <h1>Как дела?:)</h1>
+          
+          <div class="image-container">
+              <a href="/files/1.jpg" target="_blank">
+                  <img src="/files/1.jpg" width="400">
+              </a>
+          </div>
+
+          <div class="image-container">
+              <a href="/files/2.jpg" target="_blank">
+                  <img src="/files/2.jpg" width="400">
+              </a>
+          </div>
+
+          <div class="image-container">
+              <a href="/files/3.jpg" target="_blank">
+                  <img src="/files/3.jpg" width="400">
+              </a>
+          </div>
+
+          <div class="image-container">
+              <a href="/files/4.jpg" target="_blank">
+                  <img src="/files/4.jpg" width="400">
+              </a>
+          </div>
+
+          <div class="image-container">
+              <a href="/files/5.jpg" target="_blank">
+                  <img src="/files/5.jpg" width="400">
+              </a>
+          </div>
+      </body>
+      </html>
+
+- name: Configure Nginx
+  ansible.builtin.copy:
+    dest: /etc/nginx/sites-available/default
+    content: |
+      server {
+          listen 80;
+          server_name _;
+          root /var/www/html;
+          index index.html;
+          location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|otf)$ {
+              expires 30d;
+              add_header Cache-Control "public, no-transform";
+              access_log off;
+              try_files $uri =404;
+          }
+      }
+  notify: Restart Nginx
+
+- name: Enable Nginx
+  ansible.builtin.service:
+    name: nginx
+    state: started
+    enabled: true

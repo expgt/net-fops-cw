@@ -1,0 +1,30 @@
+#cloud-config
+datasource:
+  Ec2:
+    strict_id: false
+
+users:
+  - name: ${ubuntu_user}
+    groups: sudo
+    shell: /bin/bash
+    sudo: ["ALL=(ALL) NOPASSWD:ALL"]
+    ssh_authorized_keys:
+      - ${ssh_public_key}
+
+
+#%{ if install_backup_agent }
+packages:
+  - curl
+  - jq
+  - perl
+
+runcmd:
+  - echo "Starting Yandex Cloud Backup Agent installation..."
+  - |
+    POLICY_ID=$(curl -s -H "Metadata-Flavor: Google" http://169.254.169.254)
+    if [ ! -z "$POLICY_ID" ]; then
+      curl -s https://storage.yandexcloud.net/backup-distributions/agent_installer.sh | sudo bash -s -- -p "$POLICY_ID"
+    else
+      echo "Error: backup-policy-id metadata attribute not found."
+    fi
+#%{ endif }
