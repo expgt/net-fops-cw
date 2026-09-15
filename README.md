@@ -221,13 +221,13 @@ ansible-vault encrypt group_vars/all/vault.yml
 ```bash
 ansible all -m ping
 ```
-- проверку синтаксиса плейбука
+- проверку синтаксиса плейбука (при запуске ввести пароль из п.3)
 ```bash
-ansible-playbook site.yml --syntax-check
+ansible-playbook site.yml --syntax-check --ask-vault-pass
 ```
-- deployment
+- deployment (при запуске ввести пароль из п.3)
 ```bash
-ansible-playbook site.yml
+ansible-playbook site.yml --ask-vault-pass
 ```
 ---
 
