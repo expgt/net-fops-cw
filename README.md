@@ -11,7 +11,11 @@
     * [Резервное копирование](#Резервное-копирование)
     * [Дополнительно](#Дополнительно)
 * [Выполнение работы](#Выполнение-работы)
-
+* [Процедура развёртывания проекта](#Процедура-развёртывания-проекта)
+    * [Подготовка и запуск Terraform](#Подготовка-и-запуск-Terraform)
+    * [Подготовка и запуск Ansible](#Подготовка-и-запуск-Ansible)
+    * [Проверка корректности работы сервисов](#Проверка-корректности-работы-сервисов)
+    
 ---------
 ## Задача
 Согласно условию задачи разработана и развернута отказоустойчивая инфраструктура для сайта, включающая мониторинг, сбор логов и резервное копирование основных данных. Инфраструктура размещена в [Yandex Cloud](https://cloud.yandex.com/).
@@ -101,6 +105,8 @@
 
 ![Snap](https://github.com/expgt/net-fops-cw/blob/main/snap.png)
 
+Поскольку веб-ноды являются взаимозаменяемыми и не хранят уникальных пользовательских или системных данных (stateless), классическое резервное копирование дисков виртуальных машин не производится. Архитектура проекта рассчитана на то, что любой узел Instance Group может быть безвозвратно удален или пересоздан в любой момент времени без потери работоспособности сервиса из шаблона Instance Template и повторным deployment Ansible.
+
 ---
 
 ### Дополнительно
@@ -127,7 +133,122 @@
 
 ⚠️ Разворачивание сервисов выполнено с помощью docker контейнеров, основанных на официальных образах.
 
+---
 
+## Процедура развёртывания проекта
 
+### Подготовка и запуск Terraform
+
+1. Создать Авторизованный ключ (JSON) для сервисного аккаунта в Yandex Cloud 
+```bash
+yc iam key create \
+  --service-account-name <ИМЯ_СЕРВИСНОГО_АККАУНТА> \
+  --output authorized_key.json
+```
+ключ должен располагаться в домашнем каталоге ~/.authorized_key.json
+
+2. Перейти в каталог terraform:
+```bash
+cd netcw/terraform
+```
+3. Добавить значение полей в файл terraform.tfvars:
+```bash
+nano terraform.tfvars
+```
+- cloud_id = "<ID папки облака в yandex cloud>"
+- folder_id = "<ID папки каталога в yandex cloud>"
+- service_account = "<Имя сервисного аккаунта для авторизации в yandex cloud>"
+- ubuntu_user = "<Имя пользователя, которого надо создать при конфигурации ВМ>"
+- ssh_public_key = "<Публичный ключ, который нужно добавить на созданные ВМ, для доступа к ним>"
+- pg_user     = "<Имя пользователя PostgreSQL, который будет создан при конфигурации БД>"
+- pg_password = "<Пароль PostgreSQL>"
+- pg_database = "<Имя БД PostgreSQL>"
+
+4. Выполнить:
+- подготовку рабочего каталога к работе с Terraform
+```bash
+terraform init
+```
+- проверку кода на соответствие единому каноническому стилю Terraform
+```bash
+terraform fmt -check -recursive
+```
+- проверку синтаксической и логической корректности конфигурационных файлов
+```bash
+terraform validate
+```
+- предварительный просмотр всех настроек, которые будут произведены при создании инфраструктуры
+```bash
+terraform plan
+```
+- provisioning
+```bash
+terraform apply
+```
+- просмотр публичных IP Bastion, Kibana, Grafana
+```bash
+terraform output
+```
+
+5. После завершения конфигурации проверить создание файла инвентаря Ansible - /netcw/ansible/hosts.ini
+
+---
+
+### Подготовка и запуск Ansible
+
+1. Перейти в каталог ansible:
+```bash
+cd netcw/ansible
+```
+2. Добавить значение полей в файл /group_vars/all/vault.yml:
+```bash
+nano /group_vars/all/vault.yml
+```
+- telegram_chat_id: <ID чата telegram>
+- telegram_bot_token: "<Токен бота telegram>"
+- grafana_admin_user: "<Имя пользователя Grafana, который будет создан при конфигурации>"
+- grafana_admin_password: "<Пароль пользователя Grafana>"
+
+3. Выполнить:
+- шифрование конфиденциальных данных проекта 
+```bash
+ansible-vault encrypt group_vars/all/vault.yml
+```
+- задать пароль
+
+4. Выполнить:
+- проверку доступности созданных ВМ для Bastion, Kibana, Grafana
+```bash
+ansible all -m ping
+```
+- проверку синтаксиса плейбука
+```bash
+ansible-playbook site.yml --syntax-check
+```
+- deployment
+```bash
+ansible-playbook site.yml
+```
+---
+
+### Проверка корректности работы сервисов
+
+- проверить доступность сервисов ALB, Kibana, Grafana
+```bash
+curl http://<ALB_IP:80>
+```
+```bash
+curl http://<Kibana_IP:5601>
+```
+```bash
+curl http://<Grafana_IP:3000>
+```
+- проверить targets с хоста Prometheus
+```bash
+curl -s http://localhost:9090/api/v1/targets
+```
+- проверить в веб-интерфейсе отображение Grafana dashboard
+- проверить в веб-интерфейсе наличие nginx-логов в Kibana
+- проверить через [Консоль управления yandex cloud](https://console.yandex.cloud) состояние snapshot schedule
 
 
